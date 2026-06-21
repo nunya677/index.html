@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Independent Lab — Bastion & Jump Server Architecture</title>
+<style>
+  :root {
+    --navy: #1B2A4A;
+    --teal: #1E8A8A;
+    --mint: #5FD0C0;
+    --ice: #F4F8FA;
+    --text-dark: #1B2A4A;
+    --muted: #5A6B85;
+    --card-bg: #FFFFFF;
+    --border: #D8DEE9;
+    --code-bg: #0F1B2D;
+    --code-text: #D7E3F4;
+    --green: #2E9E63;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Calibri, "Segoe UI", Arial, sans-serif;
+    background: var(--ice);
+    color: var(--text-dark);
+    display: flex;
+    min-height: 100vh;
+  }
+  /* Sidebar */
+  #sidebar {
+    width: 270px;
+    background: var(--navy);
+    color: #fff;
+    padding: 24px 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  #sidebar h2 {
+    font-size: 16px;
+    padding: 0 20px;
+    margin: 0 0 4px 0;
+  }
+  #sidebar .subtitle {
+    font-size: 12px;
+    color: var(--mint);
+    padding: 0 20px;
+    margin-bottom: 18px;
+  }
+  #progressWrap { padding: 0 20px 18px 20px; }
+  #progressBarOuter {
+    background: rgba(255,255,255,0.15);
+    border-radius: 6px;
+    height: 8px;
+    overflow: hidden;
+  }
+  #progressBarInner {
+    background: var(--mint);
+    height: 100%;
+    width: 0%;
+    transition: width 0.3s ease;
+  }
+  #progressText { font-size: 12px; color: #C7D4E8; margin-top: 6px; }
+  nav#partNav { padding: 0 8px; }
+  nav#partNav .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    margin-bottom: 2px;
+    color: #DCE6F5;
+  }
+  nav#partNav .nav-item:hover { background: rgba(255,255,255,0.08); }
+  nav#partNav .nav-item.active { background: var(--teal); color: #fff; font-weight: 600; }
+  nav#partNav .nav-dot {
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 2px solid #6E83A8;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+  }
+  nav#partNav .nav-item.done .nav-dot {
+    background: var(--green); border-color: var(--green); color: #fff;
+  }
+  /* Main */
+  #main { flex: 1; padding: 40px 56px; max-width: 880px; }
+  .part-section { display: none; }
+  .part-section.active { display: block; }
+  .part-kicker { font-size: 12px; font-weight: 700; color: var(--teal); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px; }
+  .part-title { font-size: 28px; font-weight: 700; color: var(--navy); margin: 0 0 14px 0; }
+  .part-time { display: inline-block; background: #EAF4F4; color: var(--teal); font-size: 12.5px; font-weight: 600; padding: 4px 12px; border-radius: 14px; margin-bottom: 18px; }
+  .intro-text { font-size: 15.5px; line-height: 1.55; margin-bottom: 20px; }
+  .step {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 22px;
+    margin-bottom: 16px;
+  }
+  .step h4 { margin: 0 0 8px 0; font-size: 15.5px; color: var(--navy); }
+  .step p { font-size: 14.5px; line-height: 1.5; margin: 8px 0; }
+  pre.codeblock {
+    background: var(--code-bg);
+    color: var(--code-text);
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-family: "Liberation Mono", Consolas, monospace;
+    font-size: 13px;
+    overflow-x: auto;
+    position: relative;
+    margin: 10px 0;
+    line-height: 1.5;
+  }
+  .code-wrap { position: relative; }
+  .copy-btn {
+    position: absolute;
+    top: 8px; right: 8px;
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    padding: 4px 10px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .copy-btn:hover { background: rgba(255,255,255,0.25); }
+  .checkpoint {
+    background: #FFF9EC;
+    border: 1px solid #F0DDB0;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-top: 20px;
+  }
+  .checkpoint label { display: flex; align-items: flex-start; gap: 10px; font-size: 14.5px; cursor: pointer; }
+  .checkpoint input[type=checkbox] { margin-top: 3px; width: 17px; height: 17px; flex-shrink: 0; }
+  .checkpoint .cp-title { font-weight: 700; color: #8A6A1F; margin-bottom: 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .nav-buttons { display: flex; justify-content: space-between; margin-top: 30px; }
+  .nav-buttons button {
+    background: var(--teal); color: #fff; border: none; padding: 11px 26px;
+    border-radius: 8px; font-size: 14.5px; font-weight: 600; cursor: pointer;
+  }
+  .nav-buttons button.secondary { background: #fff; color: var(--teal); border: 1px solid var(--teal); }
+  .nav-buttons button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .troubleshoot-item { margin-bottom: 10px; font-size: 14px; }
+  textarea.subbox {
+    width: 100%; font-family: inherit; font-size: 14px; border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px; min-height: 70px; margin-bottom: 12px;
+  }
+  .submit-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 22px; }
+  button#emailSubmit {
+    background: var(--navy); color: #fff; border: none; padding: 13px 30px;
+    border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 8px;
+  }
+  .done-banner {
+    display: none;
+    background: #E8F8F0; border: 1px solid #B7E6CC; color: #1F7A4D;
+    border-radius: 8px; padding: 12px 16px; font-size: 14px; margin-top: 16px;
+  }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h2>Independent Lab</h2>
+  <div class="subtitle">Bastion & Jump Server Architecture</div>
+  <div id="progressWrap">
+    <div id="progressBarOuter"><div id="progressBarInner"></div></div>
+    <div id="progressText">0 of 7 checkpoints complete</div>
+  </div>
+  <nav id="partNav"></nav>
+</div>
+
+<div id="main">
+
+  <div class="part-section" data-part="0">
+    <div class="part-kicker">Overview</div>
+    <div class="part-title">Welcome to the Lab</div>
+    <div class="intro-text">
+      In the session you watched a bastion host get hardened, a jump server used to pivot, and a redundant bastion added behind a tradeoff discussion. In this lab, <strong>you build all of it yourself</strong>, end to end, on your own machine. You'll stand up a small multi-zone network, harden a bastion from scratch, prove a brute-force attack fails after hardening, review real logs, and add a redundant bastion behind a load balancer.
+      <br><br>
+      <strong>Estimated time:</strong> 2.5–3.5 hours, in one sitting or spread across a few. <strong>Format:</strong> fully independent — work top to bottom, check off each checkpoint as you go, and use the sidebar to track your progress. Nothing here touches a cloud account or production system — it's all local Docker containers.
+    </div>
+    <div class="step">
+      <h4>Prerequisites</h4>
+      <p>Before starting Part 0, confirm you have:</p>
+      <p>• Docker and Docker Compose installed and working (<code>docker --version</code> and <code>docker compose version</code> both return something)</p>
+      <p>• A terminal (macOS/Linux Terminal, or Windows WSL2 / Git Bash)</p>
+      <p>• Basic comfort running shell commands</p>
+    </div>
+    <div class="nav-buttons">
+      <button class="secondary" disabled>Previous</button>
+      <button onclick="goTo(1)">Start Part 0 →</button>
+    </div>
+  </div>
+
+  <!-- PART 0 -->
+  <div class="part-section" data-part="1">
+    <div class="part-kicker">Part 0</div>
+    <div class="part-title">Build the Topology</div>
+    <span class="part-time">~20 min</span>
+    <div class="intro-text">You're going to create four containers on three isolated Docker networks, mimicking the trust zones from the slides:
+    <pre class="codeblock">[ attacker/redteam ] --&gt; [ bastion (dmz) ] --&gt; [ jump (internal) ] --&gt; [ appserver (data) ]</pre></div>
+
+    <div class="step">
+      <h4>Step 1 — Create a project folder</h4>
+      <div class="code-wrap"><pre class="codeblock" id="code-0-1">mkdir -p ~/secure-access-lab && cd ~/secure-access-lab
+mkdir keys</pre><button class="copy-btn" onclick="copyCode('code-0-1')">Copy</button></div>
+    </div>
+
+    <div class="step">
+      <h4>Step 2 — Create docker-compose.yml</h4>
+      <p>Create this file with exactly this content:</p>
+      <div class="code-wrap"><pre class="codeblock" id="code-0-2">services:
+  bastion:
+    image: rastasheep/ubuntu-sshd:18.04
+    container_name: bastion
+    networks:
+      dmz:
+        ipv4_address: 172.28.0.10
+      internal:
+        ipv4_address: 172.28.1.10
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "2222:22"
+
+  jump:
+    image: rastasheep/ubuntu-sshd:18.04
+    container_name: jump
+    networks:
+      internal:
+        ipv4_address: 172.28.1.20
+      data:
+        ipv4_address: 172.28.2.20
+
+  appserver:
+    image: rastasheep/ubuntu-sshd:18.04
+    container_name: appserver
+    networks:
+      data:
+        ipv4_address: 172.28.2.30
+
+  redteam:
+    image: rastasheep/ubuntu-sshd:18.04
+    container_name: redteam
+    networks:
+      dmz:
+        ipv4_address: 172.28.0.50
+
+networks:
+  dmz:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+  internal:
+    ipam:
+      config:
+        - subnet: 172.28.1.0/24
+  data:
+    ipam:
+      config:
+        - subnet: 172.28.2.0/24</pre><button class="copy-btn" onclick="copyCode('code-0-2')">Copy</button></div>
+      <p><strong>Notice:</strong> <code>redteam</code> and <code>appserver</code> are never on the same network. Only <code>bastion</code> bridges every zone except <code>data</code>, and only <code>jump</code> bridges into <code>data</code>. That's the architecture doing its job before you've configured anything.</p>
+    </div>
+
+    <div class="step">
+      <h4>Step 3 — Bring it up</h4>
+      <div class="code-wrap"><pre class="codeblock" id="code-0-3">docker compose up -d
+docker compose ps</pre><button class="copy-btn" onclick="copyCode('code-0-3')">Copy</button></div>
+      <p>All four containers should show <code>Up</code>. If any shows <code>Restarting</code>, run <code>docker compose logs &lt;name&gt;</code> and fix before continuing.</p>
+    </div>
+
+    <div class="step">
+      <h4>Step 4 — Prove the segmentation works</h4>
+      <p>From <code>redteam</code>, try to reach <code>appserver</code> directly:</p>
+      <div class="code-wrap"><pre class="codeblock" id="code-0-4">docker exec -it redteam ping -c 2 172.28.2.30</pre><button class="copy-btn" onclick="copyCode('code-0-4')">Copy</button></div>
+      <p>This should <strong>fail</strong> — no route exists between the dmz and data subnets. Write down what error you see.</p>
+    </div>
+
+    <div class="checkpoint">
+      <div class="cp-title">Checkpoint 0</div>
+      <label><input type="checkbox" class="cp-box" data-cp="0"> All four containers show <code>Up</code> in <code>docker compose ps</code>, and the ping from redteam to appserver fails with a network/routing error.</label>
+    </div>
+
+    <div class="nav-buttons">
+      <button class="secondary" onclick="goTo(0)">← Previous</button>
+      <button onclick="goTo(2)">Next: Part 1 →</button>
+    </div>
+  </div>
+
+  <!-- PART 1 -->
+  <div class="part-section" data-part="2">
+    <div class="part-kicker">Part 1</div>
+    <div class="part-title">Harden the Bastion</div>
+    <span class="part-time">~40 min</span>
+    <div class="intro-text">Right now <code>bastion</code> has Ubuntu's defaults: password auth enabled, root login allowed, no rate limiting. You're going to fix all of it.</div>
+
+    <div class="step">
+      <h4>Step 1 — Generate a real keypair on your own machine</h4>
+      <div class="code-wrap"><pre class="codeblock" id="code-1-1">ssh-keygen -t ed25519 -f ~/secure-access-lab/keys/bastion_key -C "intern-bastion-key" -N ""</pre><button class="copy-btn" onclick="copyCode('code-1-1')">Copy</button></div>
+    </div>
+
+    <div class="step">
+      <h4>Step 2 — Create a non-root user and install your key</h4>
+      <div class="code-wrap"><pre class="codeblock" id="code-1-2">docker exec -it bastion bash -c "useradd -m -s /bin/bash intern && mkdir -p /home/intern/.ssh"
+docker cp ~/secure-access-lab/keys/bastion_key.pub bastion:/home/intern/.ssh/authorized_keys
+docker exec -it bastion bash -c "chown -R intern:intern /home/intern/.ssh && chmod 700 /home/intern/.ssh && chmod 600 /home/intern/.ssh/authorized_keys"</pre><button class="copy-btn" onclick="copyCode('code-1-2')">Copy</button></div>
+    </div>
+
+    <div class="step">
+      <h4>Step 3 — Edit the SSH daemon config</h4>
+      <div class="code-wrap"><pre class="codeblock" id="code-1-3">docker exec -it bastion bash
+apt-get update && apt-get install -y nano fail2ban
+nano /etc/ssh/sshd_config</pre><button class="copy-btn" onclick="copyCode('code-1-3')">Copy</button></div>
+      <p>Set (or add) these lines exactly:</p>
+      <div class="code-wrap"><pre class="codeblock" id="code-1-3b">PermitRootLogin no
+PasswordAuthentication no
+PubkeyAuthentication yes
+AllowUsers intern
+LogLevel VERBOSE</pre><button class="copy-btn" onclick="copyCode('code-1-3b')">Copy</button></div>
+      <p>Save, then restart SSH:</p>
+      <div class="code-wrap"><pre class="codeblock" id="code-1-3c">service ssh restart</pre><button class="copy-btn" onclick="copyCode('code-1-3c')">Copy</button></div>
+    </div>
+
+    <div class="step">
+      <h4>Step 4 — Configure fail2ban</h4>
+      <p>Still inside the bastion shell:</p>
+      <div class="code-wrap"><pre class="codeblock" id="code-1-4">cat > /etc/fail2ban/jail.local << 'EOF'
+[sshd]
+enabled = true
+port = ssh
+maxretry = 3
+findtime = 120
+bantime = 600
+EOF
+service fail2ban restart
+exit</pre><button class="copy-btn" onclick="copyCode('code-1-4')">Copy</button></div>
+    </div>
+
+    <div class="step">
+      <h4>Step 5 — Test key login from your own machine</h4>
+      <div class="code-wrap"><pre class="codeblock" id="code-1-5">ssh -i ~/secure-access-lab/keys/bastion_key -p 2222 intern@localhost</pre><button class="copy-btn" onclick="copyCode('code-1-5')">Copy</button></div>
+      <p>You should land on the bastion. Type <code>exit</code> to leave.</p>
+    </div>
+
+    <div class="checkpoint">
+      <div class="cp-title">Checkpoint 1</div>
+      <label><input type="checkbox" class="cp-box" data-cp="1"> You can SSH into the bastion using only your key. A password login or <code>root@localhost</code> login is refused.</label>
+    </div>
+
+    <div class="nav-buttons">
+      <button class="secondary" onclick="goTo(1)">← Previous</button>
+      <button onclick="goTo(3)">Next: Part 2 →</button>
+    </div>
+  </div>
+
+  <!-- PART 2 -->
+  <div class="part-section" data-part="3">
+    <div class="part-kicker">Part 2</div>
+    <div class="part-title">Attack Simulation, Before vs. After</div>
+    <span class="part-time">~30 min</span>
+    <div class="intro-text">This is the part that proves hardening actually matters, not just that you followed steps.</div>
+
+    <div class="step">
+      <h4>Step 1 — Install a brute-force tool on redteam</h4>
+      <div class="code-wrap"><pre class="codeblock" id="code-2-1">docker exec -it redteam bash -c "apt-get update && apt-get install -y hydra"</pre><button class="copy-btn" onclick="copyCode('code-2-1')">Copy</button></div>
+    </div>
+
+    <div class="step">
+      <h4>Step 2 — Attempt a password-guessing attack</h4>
+      <div class="code-wrap"><pre class="codeblock" id="code-2-2">docker exec -it redteam bash -c "echo -e 'root\nadmin\npassword\n123456' > /tmp/users.txt && echo -e 'password\n123456\nadmin\nletmein' > /tmp/pass.txt"
+docker exec -it redteam hydra -L /tmp/users.txt -P /tmp/pass.txt ssh://172.28.0.10</pre><button class="copy-btn" onclick="copyCode('code-2-2')">Copy</button></div>
+    </div>
+
+    <div class="step">
+      <h4>Step 3 — Record the result</h4>
+      <p>Because you disabled password authentication and root login in Part 1, this attack should fail entirely. Save the terminal output showing the failed attempt — you'll need it for submission.</p>
+    </div>
+
+    <div class="step">
+      <h4>Step 4 — Check fail2ban's view of this</h4>
+      <div class="code-wrap"><pre class="codeblock" id="code-2-4">docker exec -it bastion fail2ban-client status sshd</pre><button class="copy-btn" onclick="copyCode('code-2-4')">Copy</button></div>
+      <p>You should see a non-zero failed-attempt count, even though nothing succeeded — fail2ban watches every attempt, not just successful ones.</p>
+    </div>
+
+    <div class="checkpoint">
+      <div class="cp-title">Checkpoint 2</div>
+      <label><input type="checkbox" class="cp-box" data-cp="2"> You have a failed hydra run against the hardened bastion, plus fail2ban showing it recorded the attempts.</label>
+    </div>
+
+    <div class="nav-buttons">
+      <button class="secondary" onclick="goTo(2)">← Previous</button>
+      <button onclick="goTo(4)">Next: Part 3 →</button>
+    </div>
+  </div>
+
+  <!-- PART 3 -->
+  <div class="part-section" data-part="4">
+    <div class="part-kicker">Part 3</div>
+    <div class="part-title">Pivot Through the Jump Server</div>
+    <span class="part-time">~30 min</span>
+    <div class="intro-text">Now you'll connect through the bastion to reach the app server — the actual point of a jump-server architecture.</div>
+
+    <div class="step">
+      <h4>Step 1 — Harden the jump server</h4>
+      <p>Repeat the key-generation and hardening steps from Part 1 on the <code>jump</code> container (same <code>AllowUsers</code> / <code>PasswordAuthentication no</code> / key-install pattern). Use a separate keypair: <code>~/secure-access-lab/keys/jump_key</code>.</p>
+    </div>
+
+    <div class="step">
+      <h4>Step 2 — Confirm jump is unreachable directly</h4>
+      <p><code>jump</code> has no published port and isn't on a network your laptop can reach. The only way in is through <code>bastion</code>.</p>
+    </div>
+
+    <div class="step">
+      <h4>Step 3 — Use ProxyJump</h4>
+      <div class="code-wrap"><pre class="codeblock" id="code-3-3">ssh -i ~/secure-access-lab/keys/jump_key -o ProxyJump="intern@localhost:2222 -i ~/secure-access-lab/keys/bastion_key" intern@172.28.1.20</pre><button class="copy-btn" onclick="copyCode('code-3-3')">Copy</button></div>
+      <p>If that connects, you're now on <code>jump</code> having authenticated twice — once at the bastion, once at the jump server — without ever installing a VPN client.</p>
+    </div>
+
+    <div class="step">
+      <h4>Step 4 — Reach appserver from jump</h4>
+      <div class="code-wrap"><pre class="codeblock" id="code-3-4">ping -c 2 172.28.2.30</pre><button class="copy-btn" onclick="copyCode('code-3-4')">Copy</button></div>
+    </div>
+
+    <div class="checkpoint">
+      <div class="cp-title">Checkpoint 3</div>
+      <label><input type="checkbox" class="cp-box" data-cp="3"> A single ProxyJump command lands you on jump, and from jump you can ping appserver. From your laptop directly, you cannot.</label>
+    </div>
+
+    <div class="nav-buttons">
+      <button class="secondary" onclick="goTo(3)">← Previous</button>
+      <button onclick="goTo(5)">Next: Part 4 →</button>
+    </div>
+  </div>
+
+  <!-- PART 4 -->
+  <div class="part-section" data-part="5">
+    <div class="part-kicker">Part 4</div>
+    <div class="part-title">Read the Logs Like an Analyst</div>
+    <span class="part-time">~25 min</span>
+
+    <div class="step">
+      <h4>Step 1 — Pull the authentication log</h4>
+      <div class="code-wrap"><pre class="codeblock" id="code-4-1">docker exec -it bastion bash -c "grep sshd /var/log/auth.log | tail -40"</pre><button class="copy-btn" onclick="copyCode('code-4-1')">Copy</button></div>
+    </div>
+
+    <div class="step">
+      <h4>Step 2 — Identify four fields in at least three lines</h4>
+      <p>For your hydra attempt and your own successful key login, write down: (1) timestamp, (2) source IP, (3) username attempted, (4) outcome (accepted / failed / invalid user).</p>
+    </div>
+
+    <div class="step">
+      <h4>Step 3 — Write your analysis</h4>
+      <p>In 3–4 sentences: if you were a security analyst seeing only this log, how would you tell your own legitimate login apart from the hydra attack? What pattern gives it away?</p>
+      <textarea class="subbox" id="analysisNotes" placeholder="Type your 3-4 sentence analysis here — it'll be included in your submission email."></textarea>
+    </div>
+
+    <div class="checkpoint">
+      <div class="cp-title">Checkpoint 4</div>
+      <label><input type="checkbox" class="cp-box" data-cp="4"> You have the four fields identified for at least three log lines, plus your written analysis.</label>
+    </div>
+
+    <div class="nav-buttons">
+      <button class="secondary" onclick="goTo(4)">← Previous</button>
+      <button onclick="goTo(6)">Next: Part 5 →</button>
+    </div>
+  </div>
+
+  <!-- PART 5 -->
+  <div class="part-section" data-part="6">
+    <div class="part-kicker">Part 5</div>
+    <div class="part-title">Add Redundancy, Then Break It</div>
+    <span class="part-time">~35 min</span>
+    <div class="intro-text">This is the redundancy-vs-security exercise, but hands-on instead of on paper.</div>
+
+    <div class="step">
+      <h4>Step 1 — Add a second bastion</h4>
+      <p>Add to your <code>docker-compose.yml</code>: IP <code>172.28.0.11</code> on dmz and <code>172.28.1.11</code> on internal, container name <code>bastion2</code>, published port <code>2223:22</code>.</p>
+      <div class="code-wrap"><pre class="codeblock" id="code-5-1">docker compose up -d bastion2</pre><button class="copy-btn" onclick="copyCode('code-5-1')">Copy</button></div>
+    </div>
+
+    <div class="step">
+      <h4>Step 2 — Harden bastion2</h4>
+      <p>Use the exact same steps as Part 1, but with a <strong>different keypair</strong> (<code>bastion2_key</code>) — never share one key across redundant hosts.</p>
+    </div>
+
+    <div class="step">
+      <h4>Step 3 — Add HAProxy</h4>
+      <p>Create <code>haproxy.cfg</code>:</p>
+      <div class="code-wrap"><pre class="codeblock" id="code-5-3">frontend ssh_front
+    bind *:2200
+    mode tcp
+    default_backend ssh_back
+
+backend ssh_back
+    mode tcp
+    balance roundrobin
+    server bastion1 172.28.0.10:22 check
+    server bastion2 172.28.0.11:22 check</pre><button class="copy-btn" onclick="copyCode('code-5-3')">Copy</button></div>
+      <p>Add an <code>haproxy</code> service using the <code>haproxytech/haproxy-alpine</code> image, mounting this config, exposing port <code>2200</code>.</p>
+    </div>
+
+    <div class="step">
+      <h4>Step 4 — Test failover</h4>
+      <div class="code-wrap"><pre class="codeblock" id="code-5-4">docker compose stop bastion
+ssh -i ~/secure-access-lab/keys/bastion2_key -p 2200 intern@localhost</pre><button class="copy-btn" onclick="copyCode('code-5-4')">Copy</button></div>
+      <p>You should still get in — HAProxy routed you to bastion2.</p>
+    </div>
+
+    <div class="step">
+      <h4>Step 5 — Reflect</h4>
+      <p>What did you just gain (availability), and what did you just take on (a second host that must be patched, monitored, and have its own key managed forever)? Reference the four-factor framework (criticality, compliance, attacker-foothold cost, recovery time) for your hypothetical scenario.</p>
+      <textarea class="subbox" id="reflectionNotes" placeholder="Type your reflection here — it'll be included in your submission email."></textarea>
+    </div>
+
+    <div class="checkpoint">
+      <div class="cp-title">Checkpoint 5</div>
+      <label><input type="checkbox" class="cp-box" data-cp="5"> Failover works — killing bastion doesn't lock you out. You have a written reflection using the four-factor framework.</label>
+    </div>
+
+    <div class="nav-buttons">
+      <button class="secondary" onclick="goTo(5)">← Previous</button>
+      <button onclick="goTo(7)">Next: Cleanup & Submit →</button>
+    </div>
+  </div>
+
+  <!-- PART 6 / SUBMIT -->
+  <div class="part-section" data-part="7">
+    <div class="part-kicker">Part 6</div>
+    <div class="part-title">Cleanup &amp; Submission</div>
+    <span class="part-time">~5 min</span>
+
+    <div class="step">
+      <h4>Cleanup</h4>
+      <div class="code-wrap"><pre class="codeblock" id="code-6-1">docker compose down -v</pre><button class="copy-btn" onclick="copyCode('code-6-1')">Copy</button></div>
+      <p>Confirm with <code>docker ps -a</code> that nothing from this lab is still running.</p>
+    </div>
+
+    <div class="checkpoint">
+      <div class="cp-title">Checkpoint 6</div>
+      <label><input type="checkbox" class="cp-box" data-cp="6"> All lab containers are stopped and removed.</label>
+    </div>
+
+    <div class="step" style="margin-top:24px;">
+      <h4>Troubleshooting</h4>
+      <div class="troubleshoot-item"><strong>"Cannot connect to the Docker daemon"</strong> — Docker isn't running. Start it and retry.</div>
+      <div class="troubleshoot-item"><strong>Connection refused on port 2222</strong> — the bastion container isn't up yet, or compose restarted. Check <code>docker compose ps</code>.</div>
+      <div class="troubleshoot-item"><strong>Key login still asks for a password</strong> — confirm <code>PasswordAuthentication no</code> was saved and you ran <code>service ssh restart</code>.</div>
+      <div class="troubleshoot-item"><strong>ProxyJump fails with a permission error</strong> — check <code>authorized_keys</code> ownership and permissions (700 on .ssh, 600 on authorized_keys).</div>
+      <div class="troubleshoot-item"><strong>HAProxy won't start</strong> — check config syntax with <code>haproxy -c -f /usr/local/etc/haproxy/haproxy.cfg</code> inside the container.</div>
+    </div>
+
+    <div class="submit-card">
+      <h4 style="margin-top:0;">Submit Your Work</h4>
+      <p style="font-size:14px;">Fill in your name, then click submit — it'll open an email pre-filled with your written answers and a checklist of the evidence to attach (screenshots/terminal output for each part).</p>
+      <input type="text" id="internName" placeholder="Your name" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:6px; font-size:14px; margin-bottom:14px;">
+      <button id="emailSubmit" onclick="submitLab()">Email My Submission</button>
+      <div class="done-banner" id="doneBanner">Your email app should now be open with your write-up pre-filled. Attach your screenshots/terminal output for Parts 0, 2, 3, 4, and 5, then hit send.</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const parts = [
+  {id: 0, label: "Overview", cp: null},
+  {id: 1, label: "Part 0 — Topology", cp: 0},
+  {id: 2, label: "Part 1 — Harden Bastion", cp: 1},
+  {id: 3, label: "Part 2 — Attack Simulation", cp: 2},
+  {id: 4, label: "Part 3 — Jump Server", cp: 3},
+  {id: 5, label: "Part 4 — Read the Logs", cp: 4},
+  {id: 6, label: "Part 5 — Redundancy", cp: 5},
+  {id: 7, label: "Part 6 — Submit", cp: 6},
+];
+
+const STORAGE_KEY = "secure_access_lab_progress";
+
+function loadProgress() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+  } catch (e) { return {}; }
+}
+function saveProgress(p) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
+}
+
+function renderNav() {
+  const progress = loadProgress();
+  const nav = document.getElementById('partNav');
+  nav.innerHTML = "";
+  parts.forEach(p => {
+    const isDone = p.cp !== null && progress["cp" + p.cp];
+    const div = document.createElement('div');
+    div.className = "nav-item" + (isDone ? " done" : "");
+    div.onclick = () => goTo(p.id);
+    div.id = "navitem-" + p.id;
+    div.innerHTML = '<span class="nav-dot">' + (isDone ? "✓" : "") + '</span><span>' + p.label + '</span>';
+    nav.appendChild(div);
+  });
+  updateProgressBar();
+}
+
+function updateProgressBar() {
+  const progress = loadProgress();
+  const total = parts.filter(p => p.cp !== null).length;
+  let done = 0;
+  parts.forEach(p => { if (p.cp !== null && progress["cp" + p.cp]) done++; });
+  document.getElementById('progressBarInner').style.width = (done / total * 100) + "%";
+  document.getElementById('progressText').textContent = done + " of " + total + " checkpoints complete";
+}
+
+function goTo(id) {
+  document.querySelectorAll('.part-section').forEach(s => s.classList.remove('active'));
+  document.querySelector('.part-section[data-part="' + id + '"]').classList.add('active');
+  document.querySelectorAll('#partNav .nav-item').forEach(n => n.classList.remove('active'));
+  const navItem = document.getElementById('navitem-' + id);
+  if (navItem) navItem.classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+function copyCode(elId) {
+  const text = document.getElementById(elId).textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('#' + elId + ' + .copy-btn, [onclick="copyCode(\'' + elId + '\')"]');
+  });
+  const btns = document.querySelectorAll('.copy-btn');
+  btns.forEach(b => {
+    if (b.getAttribute('onclick') === "copyCode('" + elId + "')") {
+      const orig = b.textContent;
+      b.textContent = "Copied!";
+      setTimeout(() => { b.textContent = orig; }, 1200);
+    }
+  });
+}
+
+document.addEventListener('change', function (e) {
+  if (e.target.classList.contains('cp-box')) {
+    const cpNum = e.target.getAttribute('data-cp');
+    const progress = loadProgress();
+    progress["cp" + cpNum] = e.target.checked;
+    saveProgress(progress);
+    renderNav();
+    goTo(document.querySelector('.part-section.active').getAttribute('data-part'));
+  }
+});
+
+function restoreCheckboxes() {
+  const progress = loadProgress();
+  document.querySelectorAll('.cp-box').forEach(box => {
+    const cpNum = box.getAttribute('data-cp');
+    box.checked = !!progress["cp" + cpNum];
+  });
+}
+
+function submitLab() {
+  const name = document.getElementById('internName').value || "(name not entered)";
+  const analysis = document.getElementById('analysisNotes').value || "(not answered)";
+  const reflection = document.getElementById('reflectionNotes').value || "(not answered)";
+  const progress = loadProgress();
+
+  let lines = [];
+  lines.push("INDEPENDENT LAB SUBMISSION — Bastion & Jump Server Architecture");
+  lines.push("Name: " + name);
+  lines.push("");
+  lines.push("Checkpoints completed:");
+  parts.forEach(p => {
+    if (p.cp !== null) {
+      lines.push("  " + p.label + ": " + (progress["cp" + p.cp] ? "DONE" : "NOT MARKED DONE"));
+    }
+  });
+  lines.push("");
+  lines.push("--- Part 4 Log Analysis ---");
+  lines.push(analysis);
+  lines.push("");
+  lines.push("--- Part 5 Reflection ---");
+  lines.push(reflection);
+  lines.push("");
+  lines.push("--- Reminder: attach these before sending ---");
+  lines.push("1. Part 0 segmentation test (failed ping, redteam -> appserver)");
+  lines.push("2. Part 2 hydra output + fail2ban status");
+  lines.push("3. Part 3 ProxyJump session reaching appserver");
+  lines.push("4. Part 4 log excerpt (the lines your analysis above refers to)");
+  lines.push("5. Part 5 failover test output");
+
+  const body = lines.join("\n");
+  const subject = "Independent Lab Submission - " + name;
+  const mailto = "mailto:celindasmom3@gmail.com?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+  window.location.href = mailto;
+  document.getElementById('doneBanner').style.display = 'block';
+}
+
+renderNav();
+restoreCheckboxes();
+goTo(0);
+document.getElementById('navitem-0') && document.getElementById('navitem-0').classList.add('active');
+</script>
+
+</body>
+</html>
